@@ -8,7 +8,7 @@ from tensorflow.keras.models import load_model
 import matplotlib.pyplot as plt
 
 # Chargement du modèle et du scaler
-model = load_model('models/credit_model.h5')
+model = load_model('models/ANNs_modele_keras.h5')
 scaler = joblib.load('models/scaler.pkl')
 
 # Configuration de la page
@@ -23,6 +23,7 @@ with tab1:
     st.header("Analyse Statistique")
     df = pd.read_csv('data/processed_data.csv')
 
+    # Sélection de visualisation
     option = st.selectbox(
         "Choisissez une visualisation",
         ("Histogramme des Âges", "Distribution des Revenus", "Matrice de Corrélation")
@@ -47,6 +48,7 @@ with tab1:
 with tab2:
     st.header("Prédiction en Temps Réel")
 
+    # Formulaire de saisie
     with st.form("credit_form"):
         col1, col2 = st.columns(2)
 
@@ -62,36 +64,35 @@ with tab2:
 
         submitted = st.form_submit_button("Prédire le risque")
 
+    # Prédiction et explication SHAP
     if submitted:
-        # Données d'entrée
+        # Préparation des données
         input_data = pd.DataFrame([[revolving_util, age, past_due, debt_ratio, monthly_income, dependents]],
-            columns=['RevolvingUtilizationOfUnsecuredLines', 'age',
-                     'NumberOfTime30-59DaysPastDueNotWorse', 'DebtRatio',
-                     'MonthlyIncome', 'NumberOfDependents'])
+                                 columns=['RevolvingUtilizationOfUnsecuredLines', 'age',
+                                          'NumberOfTime30-59DaysPastDueNotWorse', 'DebtRatio',
+                                          'MonthlyIncome', 'NumberOfDependents'])
 
-        # Mise à l'échelle
+        # Scaling
         scaled_data = scaler.transform(input_data)
 
         # Prédiction
-        proba = float(model.predict(scaled_data)[0])
+        proba = model.predict(scaled_data)[0][0]
         risk = "🔴 Risque Élevé" if proba > 0.5 else "🟢 Risque Faible"
 
+        # Affichage des résultats
         st.metric("Probabilité de défaut", f"{proba:.0%}", delta_color="inverse")
         st.subheader(f"Résultat: {risk}")
 
-        # Explication SHAP avec DeepExplainer
-        background = scaled_data  # ou un échantillon si disponible
-        explainer = shap.DeepExplainer(model, background)
-        shap_values = explainer.shap_values(scaled_data)
-
+        # Explication SHAP
         st.subheader("📌 Facteurs Clés Influençant la Décision")
+        explainer = shap.Explainer(model)
+        shap_values = explainer(scaled_data)
 
-        # Affichage SHAP (summary plot en barres)
         fig, ax = plt.subplots()
-        shap.summary_plot(shap_values, input_data, plot_type="bar", show=False)
+        shap.plots.waterfall(shap_values[0], max_display=3, show=False)
         st.pyplot(fig)
 
-        # Conseils
+        # Conseils selon le risque
         if proba > 0.5:
             st.warning("""
             **Recommandations:**
